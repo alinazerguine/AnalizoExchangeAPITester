@@ -1,0 +1,2 @@
+call composer install
+pause

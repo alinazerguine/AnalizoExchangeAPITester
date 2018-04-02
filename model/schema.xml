@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Changes:
+
+
+-->
+<database name="analizoexchangeapitester" defaultIdMethod="native" identifierQuoting="true">
+    <table name="account">
+        <column name="id" type="integer" required="true" primaryKey="true" autoIncrement="true"/>
+        
+        <column name="name" type="varchar" required="true" />
+        <column name="exchange_name" type="varchar" required="true" />
+        <column name="api_key" type="varchar" required="false" />
+        <column name="api_secret" type="varchar" required="false" />
+        <column name="uid" type="varchar" required="false" />
+        <unique name="account_name_unique"><unique-column name="name" /></unique>
+        <unique name="account_api_unique">
+                <unique-column name="api_key" />
+                <unique-column name="api_secret" />
+        </unique>
+    </table>
+    <table name="ticker" phpName="Ticker">
+        <column name="id" type="integer" required="true" primaryKey="true" autoIncrement="true"/>
+        <column name="exchange_name" type="varchar" required="true" />
+        <column name="symbol" type="varchar" required="true" />
+        <column name="currency_base" type="varchar" size="10" required="true" />
+        <column name="currency_quote" type="varchar" size="10" required="true" />
+        <column name="bid" type="double" required="true" />
+        <column name="ask" type="double" required="true" />
+        <column name="last" type="double" required="false" />
+        <column name="open" type="double" required="false" />
+        <column name="high" type="double" required="false" />
+        <column name="low" type="double" required="false" />
+        <column name="volume" type="double" required="false" />
+        <column name="fee_rate_buy" type="double" required="true" />
+        <column name="fee_rate_sell" type="double" required="true" />
+        <column name="is_active" type="boolean" required="false" />
+        <behavior name="timestampable" />
+        
+        <index name="idx_currency_base"><index-column name="currency_base" /></index>
+        <index name="idx_currency_quote"><index-column name="currency_quote" /></index>
+        <unique name="idx_unique_ticker_exchange">
+            <unique-column name="symbol" />
+            <unique-column name="exchange_name" />
+        </unique>
+    </table>
+    
+    <table name="wallet" phpName="Wallet">
+        <column name="id" type="integer" required="true" primaryKey="true" autoIncrement="true"/>
+        <column name="exchange_name" type="varchar" required="true" />
+        <column name="currency" type="varchar" required="true" />
+        <column name="active" type="boolean" required="true" />
+        <column name="fee" type="double" required="false" />
+        <behavior name="timestampable" />
+        <behavior name="versionable">
+                <!-- add audit trail columns. They will be set by the system -->
+                <parameter name="log_created_at" value="true" />
+                <!-- make sure all indices from the main table are also used in de XX_version table -->
+                <parameter name="indices" value="true" />
+        </behavior>
+        
+        <index ><index-column name="currency" /></index>
+        <unique >
+            <unique-column name="currency" />
+            <unique-column name="exchange_name" />
+        </unique>
+    </table>
+    
+    <table name="matrix_item" phpName="MatrixItem">
+        <column name="id" type="integer" required="true" primaryKey="true" autoIncrement="true"/>
+        <column name="id_ticker" type="integer" required="true" />
+        <column name="currency_from" type="varchar" size="10" required="true" />
+        <column name="currency_to" type="varchar" size="10" required="true" />
+        <column name="fee_rate" type="double" required="true" />
+        <column name="conversion_rate" type="FLOAT" required="true" />
+        <column name="code_order_side_enum" type="varchar" size="20" required="true" />
+        
+        <foreign-key foreignTable="ticker" onDelete="cascade"><reference local="id_ticker" foreign="id"/></foreign-key>
+        <foreign-key foreignTable="ordersideenum"><reference local="code_order_side_enum" foreign="code"/></foreign-key>
+        
+        <behavior name="timestampable" />
+        
+        <index name="idx_currency_from"><index-column name="currency_from" /></index>
+        <index name="idx_conversion_rate"><index-column name="conversion_rate" /></index>
+        <unique name="idx_unique_matrix_item_exchange">
+            <unique-column name="currency_from" />
+            <unique-column name="currency_to" />
+            <unique-column name="id_ticker" />
+        </unique>
+        <index name="idx_currency_to"><index-column name="currency_to" /></index>
+    </table>
+    <table name="ordersideenum" phpName="OrderSideEnum">
+        <column name="code" type="varchar" size="20" required="true" primaryKey="true" />
+        <column name="description_en" type="varchar" required="true" />
+    </table>
+    
+</database>

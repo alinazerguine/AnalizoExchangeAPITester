@@ -1,0 +1,20 @@
+{
+    "name": "analizo/exchange-api-tester",
+    "authors": [
+        {
+            "name": "analizo",
+            "email": "mail@analizo.be"
+        }
+    ],
+    "require": {
+        "propel/propel": "~2.0-dev",
+        "monolog/monolog": "1.*",
+        "php": ">=5.6.0",
+        "ccxt/ccxt" : "*",
+        "predis/predis" : "*",
+        "cache/predis-adapter" : "*"
+        },
+    "autoload": {
+        "classmap": ["model/generated-classes/"]
+    }
+}
