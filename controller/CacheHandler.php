@@ -44,8 +44,8 @@ class CacheHandler{
     
     public static function getSemaphore($key){
         // exclusive control
-	//$semaphore_key = crc32($key);		// unique integer key for this semaphore (Rush fan!)        
-        //$semaphore = new Semaphore($semaphore_key);
+        // $semaphore_key = crc32($key);		// unique integer key for this semaphore (Rush fan!)        
+        // $semaphore = new Semaphore($semaphore_key);
         $semaphore = new SyncMutex($key);
         try{
             //$semaphore->acquire();
