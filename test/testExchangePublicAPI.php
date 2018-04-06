@@ -16,7 +16,7 @@ assert_options(ASSERT_QUIET_EVAL, 0);
 // Create a handler function
 function my_assert_handler($file, $line, $code, $desc = null)
 {
-    echo "Assertion failed on line $line: $code";
+    echo "Assertion failed on line $line at $file: $code";
     if ($desc) {
         echo ": $desc";
     }
@@ -27,7 +27,7 @@ assert_options(ASSERT_CALLBACK, 'my_assert_handler');
 
 
 
-$exchangeName = 'kraken';
+$exchangeName = 'yobit';
 
 
 CacheHandler::clearCache();
@@ -68,7 +68,7 @@ assert(count($currencies) > 0,"getCurrencies for $exchangeName returns an empty 
 $properties = array('active','id','code','precision','fee');
 foreach($currencies as $currency){
     foreach($properties as $property){
-        assert(array_key_exists($property, $currency),"getCurrencies for $exchangeName does not have property '$property'");
+        assert(array_key_exists($property, $currency), "getCurrencies for $exchangeName does not have property '$property'");
     }
 }
 
@@ -78,7 +78,6 @@ foreach($currencies as $currency){
 $ticker = $tickers->getFirst();
 $orderBook = ExchangeAdapter::getOrderBook($exchangeName, $ticker->getSymbol());
 assert(isset($orderBook),"getOrderBook for $exchangeName returns result null");
-
 
 /*
  * Test withdrawal fees

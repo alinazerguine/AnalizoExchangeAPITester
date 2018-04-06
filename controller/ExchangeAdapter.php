@@ -307,7 +307,7 @@ class ExchangeAdapter{
     }
 
     
-    private static function getOrderbookData ($exchangeName, $symbol, $depth=100) { 
+    private static function getOrderbookData($exchangeName, $symbol, $depth=100) { 
         $cacheKey = 'orderbook_'.$exchangeName."_".$symbol; 
         
         // try to get from cache first and return if found
@@ -403,7 +403,7 @@ class ExchangeAdapter{
                         $arrTickers = self::getTickersYobit();
                     }
                     else
-                        $arrTickers = $exchange->fetch_tickers (array());
+                        $arrTickers = $exchange->fetch_tickers(array());
                 }
                 catch(ccxt\NotSupported $e){
                     //$exchangeName == 'bitstamp' or $exchangeName == 'gdax' or $exchangeName == 'bitmex'
@@ -496,6 +496,106 @@ class ExchangeAdapter{
         return null;
     }
     
+    private static function getTickersYobit(){
+        $e = self::getExchange('yobit') ; 
+        $markets = self::getMarkets('yobit');
+        $exchange_result = array();
+        $symbols = array();
+        $market_keys = array_keys($markets);
+        for($i=0; $i<count($market_keys); $i++){
+            $symbols[] = $markets[$market_keys[$i]]['symbol'];
+            // if((count($symbols) === 300) or ($i=== count($markets)-1)){
+            //     // echo "fetching tickers : ".join($symbols,',').PHP_EOL;
+            //     // $exchange_result = array_merge($exchange_result,$e->fetch_tickers($symbols));
+            //     // $symbols = array();
+            // }
+            if ($i == 10) {
+                break;
+            }
+            $exchange_result[] = $e->fetch_ticker($markets[$market_keys[$i]]['symbol']);
+        }
+        return $exchange_result;
+    }
+    
+    public static function getCurrency($exchangeName, $currency) {
+        $currencies = self::getCurrencies($exchangeName);
+        if (array_key_exists($currency,$currencies)) {
+            return $currencies[$currency];
+        } else {
+            return null;
+        }
+    }
+    
+    public static function getCurrencies($exchangeName) {
+        $cacheKey = 'currencies_'.$exchangeName;
+                
+         // first try to get from cache
+        $currencies = CacheHandler::getFromCache($cacheKey);
+        if (isset($currencies)) {
+             self::getLogger()->addInfo('ExchangeAdapter - fetched ' . count($currencies) . ' markets from cache');
+             return $currencies;
+        }
+        
+        $exchange = self::getExchange($exchangeName);
+        if (!isset($exchange)) {
+            throw new Exception('No exchange found for name ' . $exchangeName);
+        }
+        // no methode fetch_curriencies for gdax
+        
+        if ($exchangeName == 'gdax'){
+            $currencies = self::getCurrenciesGdax('gdax'); 
+        } elseif ($exchangeName === 'binance'){
+            $currencies = self::getCurrenciesBinance();
+        } elseif ($exchangeName == 'bitstamp'){
+            $currencies = self::getCurrenciesBitstamp('bitstamp'); 
+        } elseif ($exchangeName == 'cex') {
+            $currencies = self::getCurrenciesCex('cex'); 
+        } elseif ($exchangeName == 'bitmex') {
+            $currencies = self::getCurrenciesBitmex('bitmex'); 
+        } elseif ($exchangeName == 'bitfinex') {
+            $currencies = self::getCurrenciesBitmex('bitfinex'); 
+        } elseif ($exchangeName == 'yobit') {
+            $currencies = self::getCurrenciesYobit('yobit'); 
+        } elseif (method_exists($exchange,'fetch_currencies')) {
+            $currencies = $exchange->fetch_currencies();
+            self::getLogger()->addInfo('ExchangeAdapter - fetched '.count($currencies).' markets from exchange');
+        } else {
+            throw new ExceptionAPINotImplemented('Trying to fetch currencies for exchange '.$exchangeName. ' that has no implementation for fetch_currencies');
+        }
+        
+        CacheHandler::addToCache($currencies,$cacheKey,2400);
+        return $currencies;
+    }
+    
+    public static function numberOfDecimals($value) {
+        if ((int)$value == $value) {
+            return 0;
+        } else if (! is_numeric($value)) {
+            // throw new Exception('numberOfDecimals: ' . $value . ' is not a number!');
+            return false;
+        }
+        return strlen($value) - strrpos($value, '.') - 1;
+    }
+    
+    private static function getCurrenciesGdax($exchangeName) {
+        $e = self::getExchange($exchangeName) ; 
+        $exchange_result = $e->publicGetCurrencies(array());
+        $currencies = array(); 
+        foreach ($exchange_result as $result) {
+            $currencies[$result['id']]['id'] = $result['id'];
+            $currencies[$result['id']]['code'] = $result['id'];
+            $currencies[$result['id']]['fee'] = 0;
+            $currencies[$result['id']]['info']['aclass'] = 'currency';
+            $currencies[$result['id']]['info']['altname'] = $result['id'];
+            $currencies[$result['id']]['info']['decimals'] = ExchangeAdapter::numberOfDecimals($result['min_size']);
+            $currencies[$result['id']]['info']['display_decimals'] = 5;
+            $currencies[$result['id']]['active'] = ($result['status'] == 'online' ? true : false);
+            $currencies[$result['id']]['status'] = $result['status'];
+        }
+        
+        return $currencies ; 
+    }
+    
     public static function getCurrenciesBinance(){
         $exchange = self::getExchange('binance');
         
@@ -522,119 +622,11 @@ class ExchangeAdapter{
             if (!isset($currencies[$assetCode]['active'])){
                 $currencies[$assetCode]['active']=false; 
             }
-
-//$currencies[$result['id']]['status']=  $result['status']; 
-            
-        } 
-        
+            //$currencies[$result['id']]['status']=  $result['status']; 
+        }
         
         return $currencies ; 
     }
-    
-
-    
-    public static function getCurrencies($exchangeName){
-        $cacheKey = 'currencies_'.$exchangeName;
-                
-         // first try to get from cache
-        $currencies = CacheHandler::getFromCache($cacheKey);
-        if(isset($currencies)){
-             self::getLogger()->addInfo('ExchangeAdapter - fetched '.count($currencies).' markets from cache');
-             return $currencies;
-        }
-        
-        $exchange = self::getExchange($exchangeName);
-        if(!isset($exchange)) throw new Exception('No exchange found for name ' . $exchangeName);
-        // no methode fetch_curriencies for gdax 
-        
-
-        
-        if ($exchangeName == 'gdax'){
-            $currencies = self::getCurrenciesGdax('gdax'); 
-        }
-        elseif($exchangeName === 'binance'){
-            $currencies = self::getCurrenciesBinance();
-        }elseif($exchangeName == 'bitstamp'){
-            $currencies = self::getCurrenciesBitstamp('bitstamp'); 
-        }elseif($exchangeName == 'cex'){
-            $currencies = self::getCurrenciesCex('cex'); 
-        }elseif($exchangeName == 'bitmex'){
-            $currencies = self::getCurrenciesBitmex('bitmex'); 
-        }elseif($exchangeName == 'bitfinex'){
-            $currencies = self::getCurrenciesBitmex('bitfinex'); 
-        }
-        elseif($exchangeName == 'yobit'){
-            $currencies = self::getCurrenciesYobit('yobit'); 
-        }
-        elseif(method_exists($exchange,'fetch_currencies')){
-            $currencies = $exchange->fetch_currencies();
-            self::getLogger()->addInfo('ExchangeAdapter - fetched '.count($currencies).' markets from exchange');
-        }
-        else{
-            throw new ExceptionAPINotImplemented('Trying to fetch currencies for exchange '.$exchangeName. ' that has no implementation for fetch_currencies');
-        }
-        
-        CacheHandler::addToCache($currencies,$cacheKey,2400);
-        return $currencies;
-    }
-    
-    public static function numberOfDecimals($value)
-    {
-        if ((int)$value == $value)
-        {
-            return 0;
-        }
-        else if (! is_numeric($value))
-        {
-            // throw new Exception('numberOfDecimals: ' . $value . ' is not a number!');
-            return false;
-        }
-        return strlen($value) - strrpos($value, '.') - 1;
-    }
-    
-    //"EUR","USD","BTC","LTC","ETH","ETC","RRT","ZEC","XMR","DSH","XRP","IOT","EOS","SAN","OMG","BCH","NEO","ETP","QTM","AVT","EDO","BTG","DAT","QSH","YYW","GNT","SNT","BAT","MNA","FUN","ZRX","TNB","SPK","TRX","RCN","RLC","AID","SNG","REP","ELF"
-    //"EUR","USD","BTC","LTC","ETH","ETC","RRT","ZEC","XMR","DSH","XRP","IOT","EOS","SAN","OMG","BCH","NEO","ETP","QTM","AVT","EDO","BTG","DAT","QSH","YYW","GNT","SNT","BAT","MNA","FUN","ZRX","TNB","SPK","TRX","RCN","RLC","AID","SNG","REP","ELF"
-    public static function getCurrenciesBitfinex($exchangeName){
-        $bitfinexs= array("EUR","USD","BTC","LTC","ETH","ETC","RRT","ZEC","XMR","DSH","XRP","IOT","EOS","SAN","OMG","BCH","NEO","ETP","QTM","AVT","EDO","BTG","DAT","QSH","YYW","GNT","SNT","BAT","MNA","FUN","ZRX","TNB","SPK","TRX","RCN","RLC","AID","SNG","REP","ELF");
-        
-         foreach ($bitfinexs as $bitfinex){
-                
-            $assetCode = $bitfinex;
-                       
-            $currencies[$assetCode]['id']=$bitfinex;
-            $currencies[$assetCode]['code']=$bitfinex;
-            $currencies[$assetCode]['info']['aclass']='currency';
-            $currencies[$assetCode]['info']['decimals']= 7;
-            $currencies[$assetCode]['info']['display_decimals']=5 ;
-            //dees is dangerous he 
-            $depositEnabled = true;
-            $withdrawEnabled = true;
-            $currencies[$assetCode]['active']= ($depositEnabled and $withdrawEnabled);
-        }
-        return $currencies ; 
-        
-
-    }
-    
-    public static function getCurrenciesCex($exchangeName){
-        $cexs= array('BTC'=>0.001,'ETH'=>0.01,'BTG'=>0.001,'XRP'=>0.02,'ZEC'=>0.001,'XLM'=>0.00001, 'BCH'=>0.001,/*'USD'=>null,'EUR'=>null,'RUB'=>null,'GBP'=>null,*/'DASH'=>0.01);
-        
-         foreach ($cexs as $assetCode=>$fee){                       
-            $currencies[$assetCode]['id']=$assetCode;
-            $currencies[$assetCode]['code']=$assetCode;
-            $currencies[$assetCode]['fee']=$fee;
-            $currencies[$assetCode]['info']['aclass']='currency';
-            $currencies[$assetCode]['info']['decimals']= 7;
-            $currencies[$assetCode]['info']['display_decimals']=5 ;
-            $depositEnabled = true;
-            $withdrawEnabled = true;
-            $currencies[$assetCode]['active']= ($depositEnabled and $withdrawEnabled);
-        }
-        return $currencies ; 
-        
-
-    }
-    
     
     private static function getCurrenciesBitStamp($exchangeName){
         $bitstamps = array('BTC' ,'BCH','LTC','ETH','XRP') ;   
@@ -654,6 +646,39 @@ class ExchangeAdapter{
         }
         return $currencies ; 
     }
+    
+    public static function getCurrenciesCex($exchangeName){
+        $cexs= array(
+            'BTC' => 0.001,
+            'ETH' => 0.01,
+            'BTG' => 0.001,
+            'XRP' => 0.02,
+            'ZEC' => 0.001,
+            'XLM' => 0.00001,
+            'BCH' => 0.001,
+            // 'USD' => null,
+            // 'EUR' => null,
+            // 'RUB' => null,
+            // 'GBP' => null,
+            'DASH' => 0.01
+        );
+        
+         foreach ($cexs as $assetCode=>$fee){                       
+            $currencies[$assetCode]['id']=$assetCode;
+            $currencies[$assetCode]['code']=$assetCode;
+            $currencies[$assetCode]['fee']=$fee;
+            $currencies[$assetCode]['info']['aclass']='currency';
+            $currencies[$assetCode]['info']['decimals']= 7;
+            $currencies[$assetCode]['info']['display_decimals']=5 ;
+            $depositEnabled = true;
+            $withdrawEnabled = true;
+            $currencies[$assetCode]['active']= ($depositEnabled and $withdrawEnabled);
+        }
+        return $currencies ; 
+        
+
+    }
+    
     /*
      * Example bitmex dump 
      * {"symbol":"NEOG18","rootSymbol":"NEO","state":"Open","typ":"FFCCSX",
@@ -692,72 +717,55 @@ class ExchangeAdapter{
             $currencies[$id]['info']['altname']=$result['symbol'];
             $currencies[$id]['info']['decimals']= ExchangeAdapter::numberOfDecimals($result['tickSize']) ; 
             $currencies[$id]['info']['display_decimals']=5 ;
-            $currencies[$id]['active']= ( $result['state'] == 'open' ? true : false ) ;
-            $currencies[$id]['status']=  $result['state']; 
+            $currencies[$id]['active'] = ($result['state'] == 'open' ? true : false) ;
+            $currencies[$id]['status'] = $result['state']; 
         }
         return $currencies; 
     }
 
-    private static function getCurrenciesYobit($exchangeName){
-        $e = self::getExchange($exchangeName) ; 
-        $markets = $e->fetch_markets();
-        $exchange_result = array();
-        $strIds = '';
-        foreach($markets as $market){
-            $id = $market['id'];
-            $strIds .= ((strlen($strIds) === 0) ? ',' : '') . $id;
-            if(strlen($strIds) > 2000){
-                $exchange_result = array_merge($exchange_result,$e->fetch_currencies());
-                $strIds = '';
-            }
+    //"EUR","USD","BTC","LTC","ETH","ETC","RRT","ZEC","XMR","DSH","XRP","IOT","EOS","SAN","OMG","BCH","NEO","ETP","QTM","AVT","EDO","BTG","DAT","QSH","YYW","GNT","SNT","BAT","MNA","FUN","ZRX","TNB","SPK","TRX","RCN","RLC","AID","SNG","REP","ELF"
+    //"EUR","USD","BTC","LTC","ETH","ETC","RRT","ZEC","XMR","DSH","XRP","IOT","EOS","SAN","OMG","BCH","NEO","ETP","QTM","AVT","EDO","BTG","DAT","QSH","YYW","GNT","SNT","BAT","MNA","FUN","ZRX","TNB","SPK","TRX","RCN","RLC","AID","SNG","REP","ELF"
+    public static function getCurrenciesBitfinex($exchangeName) {
+        $bitfinexs= array("EUR","USD","BTC","LTC","ETH","ETC","RRT","ZEC","XMR","DSH","XRP","IOT","EOS","SAN","OMG","BCH","NEO","ETP","QTM","AVT","EDO","BTG","DAT","QSH","YYW","GNT","SNT","BAT","MNA","FUN","ZRX","TNB","SPK","TRX","RCN","RLC","AID","SNG","REP","ELF");
+        
+         foreach ($bitfinexs as $bitfinex){
+                
+            $assetCode = $bitfinex;
+                       
+            $currencies[$assetCode]['id']=$bitfinex;
+            $currencies[$assetCode]['code']=$bitfinex;
+            $currencies[$assetCode]['info']['aclass']='currency';
+            $currencies[$assetCode]['info']['decimals']= 7;
+            $currencies[$assetCode]['info']['display_decimals']=5 ;
+            //dees is dangerous he 
+            $depositEnabled = true;
+            $withdrawEnabled = true;
+            $currencies[$assetCode]['active']= ($depositEnabled and $withdrawEnabled);
         }
-        return $exchange_result;
+        return $currencies ; 
+        
+
     }
     
-    private static function getTickersYobit(){
+    private static function getCurrenciesYobit($exchangeName) {
         $e = self::getExchange('yobit') ; 
         $markets = self::getMarkets('yobit');
-        $exchange_result = array();
-        $symbols = array();
-        for($i=0; $i<count($markets); $i++){
-            $symbols[] = $markets[$i]['symbol'];
-            if((count($symbols) === 300) or ($i=== count($markets)-1)){
-                echo "fetching tickers : ".join($symbols,',').PHP_EOL;
-                //$exchange_result = array_merge($exchange_result,$e->fetch_tickers($symbols));
-                $symbols = array();
-            }
-            //$exchange_result[] = $e->fetch_ticker($markets[$i]['symbol']);
+        $market_keys = array_keys($markets);
+        $currencies = array();
+        $symbol = array();
+        $info = array();
+        for ($i = 0; $i < count($market_keys); $i++) {
+            $symbol = $markets[$market_keys[$i]]['symbol'];
+            $info = $markets[$market_keys[$i]]['info'];
+            $currencies[$symbol]['id'] = $markets[$market_keys[$i]]['id'];
+            $currencies[$symbol]['code'] = $markets[$market_keys[$i]]['symbol'];
+            $currencies[$symbol]['info'] = $info;
+            $currencies[$symbol]['fee'] = $info['fee'];
+            $currencies[$symbol]['precision'] = $markets[$market_keys[$i]]['precision'];
+            $currencies[$symbol]['active'] = $markets[$market_keys[$i]]['active'];
+            $currencies[$symbol]['status'] = ($markets[$market_keys[$i]]['active'] ? 'open' : 'close');
         }
-        return $exchange_result;
-    }
-    
-    private static function getCurrenciesGdax($exchangeName){
-       $e = self::getExchange($exchangeName) ; 
-        $exchange_result = $e->publicGetCurrencies( array()) ; 
-        $currencies = array(); 
-        foreach ($exchange_result as $result) {
-            $currencies[$result['id']]['id']=$result['id'];
-            $currencies[$result['id']]['code']=$result['id'];
-            $currencies[$result['id']]['fee']=0;
-            $currencies[$result['id']]['info']['aclass']='currency';
-            $currencies[$result['id']]['info']['altname']=$result['id'];
-            $currencies[$result['id']]['info']['decimals']= ExchangeAdapter::numberOfDecimals($result['min_size']) ; 
-            $currencies[$result['id']]['info']['display_decimals']=5 ;
-            $currencies[$result['id']]['active']= ( $result['status'] == 'online' ? true : false ) ;
-            $currencies[$result['id']]['status']=  $result['status']; 
-            
-        } 
-        
-        
-        return $currencies ; 
-    }
-    
-    public static function getCurrency($exchangeName, $currency){
-        $currencies = self::getCurrencies($exchangeName);
-        if(array_key_exists($currency,$currencies)){
-            return $currencies[$currency];
-        }
-        else return null;
+        return $currencies;
     }
     
     public static function isWalletActive($exchangeName, $currency){
@@ -788,7 +796,7 @@ class ExchangeAdapter{
              return $byId ? $markets['byid'] : $markets['byticker'];
         }
         
-        $exchange = self::getExchange($exchangeName);
+        $exchange = self::getExchange($exchangeName, array('timeout'=> 300000));
         if(!isset($exchange)) throw new Exception('No exchange found for name ' . $exchangeName);
 
         //$markets = $exchange->load_markets();
@@ -906,10 +914,10 @@ class ExchangeAdapter{
         }
         try{
             $res = $exchange->cancel_order(
-                    $order->getExchangeOrderId(),
-                    $order->getTickerSymbol(),
-                    $params
-                    );
+                $order->getExchangeOrderId(),
+                $order->getTickerSymbol(),
+                $params
+            );
             self::getLogger()->addInfo('ExchangeAdapter - cancelled order '.$order->getId());
         
             
@@ -1909,47 +1917,58 @@ class ExchangeAdapter{
         }
         
         // first try the array in this class
-        if(array_key_exists(strtolower($exchangeName),self::$witdrawalFees)){
-            if(array_key_exists($currency,self::$witdrawalFees[strtolower($exchangeName)])){
+        if (array_key_exists(strtolower($exchangeName), self::$witdrawalFees)) {
+            if (array_key_exists($currency, self::$witdrawalFees[strtolower($exchangeName)])) {
                 $fee = self::$witdrawalFees[strtolower($exchangeName)][$currency];
-                if(isset($fee))
+                if (isset($fee))
                     return $fee;
             }
         }
         
-        if(($exchangeName == 'bittrex') or ($exchangeName == 'poloniex') or ($exchangeName == 'kraken') or ($exchangeName=='bitbtc2')){
-            if(is_array($exchange->fees['funding'])===false){
+        if (
+            $exchangeName == 'bittrex' ||
+            $exchangeName == 'poloniex' ||
+            $exchangeName == 'kraken' ||
+            $exchangeName=='bitbtc2'
+        ) {
+            if (is_array($exchange->fees['funding']) === false) {
                 $exchange->fees['funding'] = array('withdraw'=>array());
             }
-            if(array_key_exists('withdraw',$exchange->fees['funding'])===false){
+            if (array_key_exists('withdraw',$exchange->fees['funding']) === false) {
                 $exchange->fees['funding']['withdraw'] = array();
             }
-            if(array_key_exists($currency,$exchange->fees['funding']['withdraw']) == false){
+            if (array_key_exists($currency,$exchange->fees['funding']['withdraw']) == false) {
                 // fetch them once, and store them for later use
                 $curs = $exchange->fetch_currencies();
-                foreach($curs as $cur=>$info){
+                foreach ($curs as $cur => $info) {
                     $exchange->fees['funding']['withdraw'][$cur] = $info['fee'];
                 }
             }
-            if(array_key_exists($currency,$exchange->fees['funding']['withdraw'])){
+            if (array_key_exists($currency, $exchange->fees['funding']['withdraw'])) {
                 return $exchange->fees['funding']['withdraw'][$currency];
             }
-        }
-        elseif(($exchangeName == 'binance') or ($exchangeName == 'hitBTC2') or ($exchangeName == 'cex')or ($exchangeName == 'bitstamp')){
+        } else if (
+            $exchangeName == 'binance' ||
+            $exchangeName == 'hitBTC2' ||
+            $exchangeName == 'cex' ||
+            $exchangeName == 'bitstamp' ||
+            $exchangeName == 'yobit'
+        ) {
             $withdrawalFees = $exchange->fees['funding']['withdraw'];
-            if(array_key_exists($currency,$withdrawalFees))
+            if (array_key_exists($currency,$withdrawalFees)) {
                 //return array('fee'=>$withdrawalFees[$currency]);
                 return $withdrawalFees[$currency];
-            // try to get them from currency
-            else{
+            } else {
+                // try to get them from currency
                 $cur = self::getCurrency($exchangeName, $currency);
-                if(isset($cur)){
-                    if(array_key_exists('fee',$cur))
-                            return $cur['fee'];
+                if (isset($cur)) {
+                    if (array_key_exists('fee',$cur))
+                        return $cur['fee'];
                 }
             }
+        } else {
+            throw new Exception("Trying to get withdrawal fee on exchange $exchangeName that has no implementation for getting the fee");
         }
-        else throw new Exception("Trying to get withdrawal fee on exchange $exchangeName that has no implementation for getting the fee");
         return null;
     }
     
